@@ -70,6 +70,8 @@ public protocol StompClientLibDelegate {
 }
 
 public class StompClientLib: NSObject, SRWebSocketDelegate {
+    lazy var heartbeat: HeartBeat = HeartBeat { self.sendHeartBeat() }
+    
     var socket: SRWebSocket?
     var sessionId: String?
     var delegate: StompClientLibDelegate?
@@ -77,6 +79,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     public var connection: Bool = false
     public var certificateCheckEnabled = true
     private var urlRequest: NSURLRequest?
+    
     
     public func sendJSONForDict(dict: AnyObject, toDestination destination: String) {
         do {
@@ -101,6 +104,10 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
         self.connectionHeaders = connectionHeaders
         openSocketWithURLRequest(request: request, delegate: delegate)
         self.connection = true
+    }
+    
+    private func sendHeartBeat() {
+        self.socket?.send(StompCommands.commandPing)
     }
     
     private func openSocket() {
@@ -145,6 +152,15 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
             self.openSocket()
         }
     }
+    
+    private func updateHeartBeat() {
+        guard let heartBeatHeader = self.connectionHeaders?[StompCommands.commandHeaderHeartBeat] else { return }
+        let heartBeatTimeIntervals = heartBeatHeader.components(separatedBy: ",").map { Double($0.trimmingCharacters(in: .whitespaces)) }
+        
+        self.heartbeat.clientTimeInterval = heartBeatTimeIntervals[0] ?? 0
+        self.heartbeat.serverTimeInterval = heartBeatTimeIntervals[1] ?? 0
+    }
+    
     
     public func webSocket(_ webSocket: SRWebSocket!, didReceiveMessage message: Any!) {
         
@@ -251,6 +267,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
             frameString += StompCommands.controlChar
             
             if socket?.readyState == .OPEN {
+                heartbeat.renewClientHeartBeat()
                 socket?.send(frameString)
             } else {
                 if let delegate = delegate {
@@ -287,6 +304,9 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     }
     
     private func receiveFrame(command: String, headers: [String: String], body: String?) {
+        
+        heartbeat.renewServerHeartBeat()
+        
         if command == StompCommands.responseFrameConnected {
             // Connected
             if let sessId = headers[StompCommands.responseHeaderSession] {
@@ -494,5 +514,167 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
             // Disconnect the socket
             self.disconnect()
         }
+    }
+}
+
+
+ class HeartBeat {
+    var onSend: () -> Void
+    var onServerHeartBeatError: (() -> Void)?
+    
+    private var clientTimer: DebounceTimer?
+    private var serverTimer: DebounceTimer?
+    
+    private let minimumTimeInterval: TimeInterval = 5
+    
+    var clientTimeInterval: TimeInterval = 0
+    var serverTimeInterval: TimeInterval = 0
+    
+    
+    init(_ onSend: @escaping () -> Void) {
+        self.onSend = onSend
+    }
+    
+    
+    func renewClientHeartBeat() {
+        guard clientTimeInterval > minimumTimeInterval else {
+            self.stop()
+            return
+        }
+        
+        self.startClientTimer()
+    }
+    
+    func renewServerHeartBeat() {
+        guard serverTimeInterval > minimumTimeInterval else {
+            self.stop()
+            return
+        }
+        
+        self.startServerTimer()
+    }
+    
+    func stop() {
+        self.clientTimer?.suspend()
+        self.serverTimer?.suspend()
+    }
+    
+
+    private func startClientTimer() {
+        guard let clientTimer = self.clientTimer else {
+            self.clientTimer = DebounceTimer(timeInterval: clientTimeInterval)
+            self.clientTimer?.eventHandler = { [weak self] in
+                self?.onClientTimerEvent()
+            }
+            return
+        }
+        
+        clientTimer.renewInterval(clientTimeInterval)
+    }
+    
+    private func startServerTimer() {
+        guard let serverTimer = self.serverTimer else {
+            self.serverTimer = DebounceTimer(timeInterval: serverTimeInterval, leeway: .microseconds(500))
+            self.serverTimer?.eventHandler = { [weak self] in
+                self?.onServerHeartBeatError?()
+            }
+            return
+        }
+        
+        serverTimer.renewInterval(serverTimeInterval)
+    }
+    
+     private func onClientTimerEvent() {
+        self.onSend()
+    }
+    
+     private func onServerTimerEvent() {
+        self.onServerHeartBeatError?()
+    }
+}
+
+
+class DebounceTimer {
+    
+    private enum State {
+        case suspended
+        case running
+        case stopped
+    }
+    
+    private var state: State = .suspended
+    private var timer: DispatchSourceTimer?
+    private var leeway: DispatchTimeInterval
+    private var timeInterval: TimeInterval
+    
+    var eventHandler: (() -> Void)?
+    
+    init(timeInterval: TimeInterval, leeway: DispatchTimeInterval = .nanoseconds(0)) {
+        self.timeInterval = timeInterval
+        self.leeway = leeway
+        self.timer = createTimer()
+    }
+    
+    func renewInterval(_ interval: TimeInterval? = nil, start: Bool = true) {
+        if state == .running {
+            suspend()
+        }
+        
+        if let timeInterval = interval {
+            self.timeInterval = timeInterval
+        }
+        
+        destroy()
+        self.timer = createTimer()
+        self.state = .suspended
+        
+        if start {
+            timer?.resume()
+            self.state = .running
+        }
+        
+    }
+    
+    private func createTimer() -> DispatchSourceTimer {
+        let timer = DispatchSource.makeTimerSource()
+        timer.schedule(deadline: .now() + timeInterval, leeway: leeway)
+        timer.setEventHandler(handler: { [weak self] in
+            self?.timerEvent()
+        })
+        
+        return timer
+    }
+    
+    private func resume() {
+        guard state != .running else {
+            return
+        }
+        state = .running
+        timer?.resume()
+    }
+    
+    func suspend() {
+        guard state != .suspended else {
+            return
+        }
+        
+        state = .suspended
+        timer?.suspend()
+    }
+    
+    private func timerEvent() {
+        state = .stopped
+        self.eventHandler?()
+    }
+    
+    private func destroy() {
+        timer?.setEventHandler {}
+        timer?.cancel()
+        resume()
+        eventHandler = nil
+    }
+    
+    deinit {
+      self.destroy()
     }
 }
