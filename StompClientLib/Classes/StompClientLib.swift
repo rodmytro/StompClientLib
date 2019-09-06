@@ -102,6 +102,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     
     public func openSocketWithURLRequest(request: NSURLRequest, delegate: StompClientLibDelegate, connectionHeaders: [String: String]?) {
         self.connectionHeaders = connectionHeaders
+        self.updateHeartBeat()
         openSocketWithURLRequest(request: request, delegate: delegate)
         self.connection = true
     }
@@ -154,11 +155,15 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     }
     
     private func updateHeartBeat() {
-        guard let heartBeatHeader = self.connectionHeaders?[StompCommands.commandHeaderHeartBeat] else { return }
-        let heartBeatTimeIntervals = heartBeatHeader.components(separatedBy: ",").map { Double($0.trimmingCharacters(in: .whitespaces)) }
         
-        self.heartbeat.clientTimeInterval = heartBeatTimeIntervals[0] ?? 0
-        self.heartbeat.serverTimeInterval = heartBeatTimeIntervals[1] ?? 0
+        guard let heartBeatHeader = self.connectionHeaders?[StompCommands.commandHeaderHeartBeat] else { return }
+        let heartBeatTimeIntervals =
+            heartBeatHeader.components(separatedBy: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces))}.map { $0 / 1000}
+        
+        guard heartBeatTimeIntervals.count == 2 else { return }
+        
+        self.heartbeat.clientTimeInterval = heartBeatTimeIntervals[0]
+        self.heartbeat.serverTimeInterval = heartBeatTimeIntervals[1]
     }
     
     
@@ -304,9 +309,6 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     }
     
     private func receiveFrame(command: String, headers: [String: String], body: String?) {
-        
-        heartbeat.renewServerHeartBeat()
-        
         if command == StompCommands.responseFrameConnected {
             // Connected
             if let sessId = headers[StompCommands.responseHeaderSession] {
@@ -339,6 +341,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
             socket?.send(StompCommands.commandPing)
             if let delegate = delegate {
                 DispatchQueue.main.async(execute: {
+                    self.heartbeat.renewServerHeartBeat()
                     delegate.serverDidSendPing()
                 })
             }
