@@ -598,13 +598,11 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     }
 }
 
-
 class DebounceTimer {
     
     private enum State {
         case suspended
         case running
-        case stopped
     }
     
     private var state: State = .suspended
@@ -621,7 +619,6 @@ class DebounceTimer {
     }
     
     func renewInterval(_ interval: TimeInterval? = nil, start: Bool = true) {
-        
         if let timeInterval = interval {
             self.timeInterval = timeInterval
         }
@@ -634,7 +631,6 @@ class DebounceTimer {
             timer?.resume()
             self.state = .running
         }
-        
     }
     
     private func createTimer() -> DispatchSourceTimer {
@@ -648,7 +644,7 @@ class DebounceTimer {
     }
     
     private func resume() {
-        guard state != .running else {
+        guard state == .suspended else {
             return
         }
         state = .running
@@ -656,7 +652,7 @@ class DebounceTimer {
     }
     
     func suspend() {
-        guard state != .suspended else {
+        guard state == .running else {
             return
         }
         state = .suspended
@@ -664,18 +660,14 @@ class DebounceTimer {
     }
     
     private func timerEvent() {
-        state = .stopped
         self.eventHandler?()
     }
     
     private func destroy() {
         timer?.setEventHandler {}
         timer?.cancel()
-        if (state != .running) {
-            timer?.resume()
-        }
+        resume()
         timer = nil
-        eventHandler = nil
     }
     
     deinit {
