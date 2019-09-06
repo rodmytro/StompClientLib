@@ -272,7 +272,9 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
             frameString += StompCommands.controlChar
             
             if socket?.readyState == .OPEN {
-                heartbeat.renewClientHeartBeat()
+                DispatchQueue.main.async(execute: {
+                    self.heartbeat.renewClientHeartBeat()
+                })
                 socket?.send(frameString)
             } else {
                 if let delegate = delegate {
@@ -619,9 +621,6 @@ class DebounceTimer {
     }
     
     func renewInterval(_ interval: TimeInterval? = nil, start: Bool = true) {
-        if state == .running {
-            suspend()
-        }
         
         if let timeInterval = interval {
             self.timeInterval = timeInterval
@@ -660,7 +659,6 @@ class DebounceTimer {
         guard state != .suspended else {
             return
         }
-        
         state = .suspended
         timer?.suspend()
     }
@@ -673,7 +671,10 @@ class DebounceTimer {
     private func destroy() {
         timer?.setEventHandler {}
         timer?.cancel()
-        resume()
+        if (state != .running) {
+            timer?.resume()
+        }
+        timer = nil
         eventHandler = nil
     }
     
