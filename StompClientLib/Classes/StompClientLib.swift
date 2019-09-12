@@ -108,6 +108,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     }
     
     private func sendHeartBeat() {
+        guard socket?.readyState == .OPEN else { return }
         self.socket?.send(StompCommands.commandPing)
     }
     
@@ -127,6 +128,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     private func closeSocket(){
         if let delegate = delegate {
             DispatchQueue.main.async(execute: {
+                self.heartbeat.stop()
                 delegate.stompClientDidDisconnect(client: self)
                 if self.socket != nil {
                     // Close the socket
@@ -540,10 +542,9 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
         self.onSend = onSend
     }
     
-    
     func renewClientHeartBeat() {
         guard clientTimeInterval > minimumTimeInterval else {
-            self.stop()
+            self.clientTimer?.suspend()
             return
         }
         
@@ -552,7 +553,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     
     func renewServerHeartBeat() {
         guard serverTimeInterval > minimumTimeInterval else {
-            self.stop()
+            self.serverTimer?.suspend()
             return
         }
         
