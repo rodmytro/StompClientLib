@@ -532,7 +532,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     private var clientTimer: DebounceTimer?
     private var serverTimer: DebounceTimer?
     
-    private let minimumTimeInterval: TimeInterval = 5
+    private let minimumTimeInterval: TimeInterval = 1
     
     var clientTimeInterval: TimeInterval = 0
     var serverTimeInterval: TimeInterval = 0
@@ -599,7 +599,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     }
 }
 
-class DebounceTimer {
+class DebounceTimer: CustomStringConvertible {
     
     private enum State {
         case suspended
@@ -636,7 +636,7 @@ class DebounceTimer {
     
     private func createTimer() -> DispatchSourceTimer {
         let timer = DispatchSource.makeTimerSource()
-        timer.schedule(deadline: .now() + timeInterval, leeway: leeway)
+        timer.schedule(deadline: .now() + timeInterval, repeating: timeInterval, leeway: leeway)
         timer.setEventHandler(handler: { [weak self] in
             self?.timerEvent()
         })
@@ -673,5 +673,9 @@ class DebounceTimer {
     
     deinit {
       self.destroy()
+    }
+    
+    var description: String {
+        return "\(self): state = \(state), timer= \(String(describing: timer))"
     }
 }
