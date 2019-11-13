@@ -61,18 +61,12 @@ public enum StompAckMode {
 // Fundamental Protocols
 public protocol StompClientLibDelegate {
     func stompClient(client: StompClientLib!, didReceiveMessageWithJSONBody jsonBody: AnyObject?, akaStringBody stringBody: String?, withHeader header:[String:String]?, withDestination destination: String)
-    
     func stompClientDidDisconnect(client: StompClientLib!)
     func stompClientDidConnect(client: StompClientLib!)
     func serverDidSendReceipt(client: StompClientLib!, withReceiptId receiptId: String)
     func serverDidSendError(client: StompClientLib!, withErrorMessage description: String, detailedErrorMessage message: String?)
     func serverDidFailWithError(client: StompClientLib!, error: Error)
-    func serverDidSendError(client: StompClientLib!, withError: Error)
     func serverDidSendPing()
-}
-
-extension StompClientLibDelegate {
-    func serverDidSendError(client: StompClientLib!, withError: Error)
 }
 
 public class StompClientLib: NSObject, SRWebSocketDelegate {
