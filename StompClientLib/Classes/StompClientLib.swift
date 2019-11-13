@@ -66,14 +66,14 @@ public protocol StompClientLibDelegate {
     func stompClientDidConnect(client: StompClientLib!)
     func serverDidSendReceipt(client: StompClientLib!, withReceiptId receiptId: String)
     func serverDidSendError(client: StompClientLib!, withErrorMessage description: String, detailedErrorMessage message: String?)
+    func serverDidFailWithError(client: StompClientLib!, error: Error)
     func serverDidSendError(client: StompClientLib!, withError: Error)
     func serverDidSendPing()
 }
 
 extension StompClientLibDelegate {
-    func serverDidSendError(client: StompClientLib!, withErrorMessage description: String, detailedErrorMessage message: String?) { }
+    func serverDidSendError(client: StompClientLib!, withError: Error)
 }
-
 
 public class StompClientLib: NSObject, SRWebSocketDelegate {
     lazy var heartbeat: HeartBeat = HeartBeat { self.sendHeartBeat() }
@@ -232,8 +232,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
         
         if let delegate = delegate {
             DispatchQueue.main.async(execute: {
-                delegate.serverDidSendError(client: self, withErrorMessage: error.localizedDescription, detailedErrorMessage: error as? String)
-                delegate.serverDidSendError(client: self, withError: error)
+                delegate.serverDidFailWithError(client: self, error: error)
             })
         }
     }
