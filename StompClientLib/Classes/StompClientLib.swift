@@ -63,6 +63,7 @@ public protocol StompClientLibDelegate {
     func stompClient(client: StompClientLib!, didReceiveMessageWithJSONBody jsonBody: AnyObject?, akaStringBody stringBody: String?, withHeader header:[String:String]?, withDestination destination: String)
     func stompClientDidDisconnect(client: StompClientLib!)
     func stompClientDidConnect(client: StompClientLib!)
+    func stompClientDidSendHeartBeat()
     func serverDidSendReceipt(client: StompClientLib!, withReceiptId receiptId: String)
     func serverDidSendError(client: StompClientLib!, withErrorMessage description: String, detailedErrorMessage message: String?)
     func serverDidFailWithError(client: StompClientLib!, error: Error)
@@ -110,6 +111,7 @@ public class StompClientLib: NSObject, SRWebSocketDelegate {
     private func sendHeartBeat() {
         guard socket?.readyState == .OPEN else { return }
         self.socket?.send(StompCommands.commandPing)
+        delegate?.stompClientDidSendHeartBeat()
     }
     
     private func openSocket() {
